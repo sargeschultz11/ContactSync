@@ -150,6 +150,26 @@ A diagnostic script for analyzing contact data for a specific user.
 3. Reports on contact categories and their distribution
 4. Provides detailed output for diagnosing contact-related issues
 
+## Mobile Device Configuration
+
+### Configuring Intune for iOS Devices
+To ensure that the synchronized contacts are available on mobile devices, you need to configure an Email profile in Microsoft Intune:
+
+1. In the Microsoft Intune admin center, navigate to **Devices** > **Configuration profiles**
+2. Create a new profile using the **Email** template
+3. Configure the following settings:
+   - **Email server**: outlook.office365.com
+   - **Account name**: Corporate Directory
+   - **Username attribute from Microsoft Entra ID**: User principal name
+   - **Email address attribute from Microsoft Entra ID**: User principal name
+   - **Authentication method**: Username and password
+   - **SSL**: Enable
+   - **OAuth**: Enable
+   - **Exchange data to sync**: Contacts only
+   - **Allow users to change sync settings**: No
+4. Assign the profile to the appropriate groups
+5. The contacts will sync to iOS devices without requiring user interaction
+
 ## Migration from CiraSync
 
 The ContactCleanup.ps1 and DeleteContactFolder.ps1 scripts are specifically designed to assist with migration from CiraSync to the ContactsSync solution. They help clean up lingering data from the previous system, including:
