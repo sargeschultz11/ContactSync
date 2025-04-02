@@ -1,5 +1,14 @@
 # ContactSync - Enterprise Contact Synchronization Solution for Microsoft 365
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue.svg)](https://github.com/PowerShell/PowerShell)
+[![Microsoft 365](https://img.shields.io/badge/Microsoft_365-compatible-brightgreen.svg)](https://www.microsoft.com/microsoft-365)
+[![Graph API](https://img.shields.io/badge/Microsoft_Graph-v1.0-blue.svg)](https://developer.microsoft.com/en-us/graph)
+[![Azure](https://img.shields.io/badge/Azure_Automation-compatible-0089D6.svg)](https://azure.microsoft.com/en-us/products/automation)
+[![Version](https://img.shields.io/badge/Version-2.1-success.svg)](https://github.com/swiderski/ContactSync)
+[![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg)](https://github.com/swiderski/ContactSync)
+[![Made with](https://img.shields.io/badge/Made%20with-PowerShell-1f425f.svg)](https://www.microsoft.com/powershell)
+
 ## Overview
 This repository contains a suite of PowerShell scripts for managing Microsoft 365 contacts across your organization. The main script, ContactsSync.ps1, automates the synchronization of all licensed Microsoft 365 users to the Exchange contacts of members in a specified security group. Additional utility scripts are provided for cleanup, diagnostics, and maintenance operations.
 
