@@ -5,7 +5,7 @@
 [![Microsoft 365](https://img.shields.io/badge/Microsoft_365-compatible-brightgreen.svg)](https://www.microsoft.com/microsoft-365)
 [![Graph API](https://img.shields.io/badge/Microsoft_Graph-v1.0-blue.svg)](https://developer.microsoft.com/en-us/graph)
 [![Azure](https://img.shields.io/badge/Azure_Automation-compatible-0089D6.svg)](https://azure.microsoft.com/en-us/products/automation)
-[![Version](https://img.shields.io/badge/Version-2.1-success.svg)](https://github.com/swiderski/ContactSync)
+[![GitHub release](https://img.shields.io/github/release/sargeschultz11/ContactSync.svg)](https://GitHub.com/sargeschultz11/ContactSync/releases/)
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg)](https://github.com/swiderski/ContactSync)
 [![Made with](https://img.shields.io/badge/Made%20with-PowerShell-1f425f.svg)](https://www.microsoft.com/powershell)
 
@@ -20,6 +20,7 @@ This repository contains a suite of PowerShell scripts for managing Microsoft 36
 - Configurable to include or exclude cloud-only users
 - Optimized performance with batch operations and fallback mechanisms
 - Throttling detection and handling
+- Support for Azure Automation Managed Identity authentication (improved security)
 
 ## Included Scripts
 
@@ -29,49 +30,48 @@ This repository contains a suite of PowerShell scripts for managing Microsoft 36
 | **ContactCleanup.ps1** | Removes duplicate contacts and contacts with specified categories |
 | **DeleteContactFolder.ps1** | Deletes specific contact folders (e.g., "Administrator") |
 | **ContactDiagnostic.ps1** | Analyzes contact data for a specific user to help troubleshoot issues |
+| **Add-GraphPermissions.ps1** | Helper script for assigning Graph API permissions to your Automation Account's Managed Identity |
 
 ## Prerequisites
 - Microsoft 365 tenant with Exchange Online
-- Azure Automation account
-- App Registration in Azure AD with appropriate Graph API permissions
+- Azure Automation account with System-Assigned Managed Identity enabled
 - Security group containing users who should receive the contacts
+- Az PowerShell modules installed in your Automation account
 
 ## Required Graph API Permissions
-The application requires the following Microsoft Graph API permissions:
+The Managed Identity requires the following Microsoft Graph API permissions:
 - `User.Read.All` - To read all user profiles
 - `Group.Read.All` - To read group memberships
 - `Contacts.ReadWrite` - To manage user contacts
 
-## Setup Instructions
+## Setup Instructions (Managed Identity Authentication)
 
-### 1. Create an App Registration in Azure AD
-1. Navigate to Azure Active Directory > App Registrations
-2. Create a new registration:
-   - Name: ContactsSync
-   - Supported account type: Single tenant
-   - Redirect URI: (Web) https://portal.azure.com
-3. Note the Application (client) ID and Directory (tenant) ID
-4. Under Certificates & Secrets, create a new client secret and note the value
+### 1. Enable System-Assigned Managed Identity
+1. Navigate to your Azure Automation account
+2. Select "Identity" from the sidebar
+3. Under "System assigned" tab, switch the Status to "On" and click "Save"
+4. Copy the Object ID - you'll need this to assign API permissions
 
-### 2. Assign API Permissions
-1. Go to API Permissions
-2. Add the following Microsoft Graph permissions:
-   - User.Read.All
-   - Group.Read.All
-   - Contacts.ReadWrite
-3. Grant admin consent for your organization
+### 2. Assign API Permissions to Managed Identity
+1. Import the `Add-GraphPermissions.ps1` script into your Azure environment
+2. Run the script with the Object ID from your Automation Account's Managed Identity:
+   ```powershell
+   ./Add-GraphPermissions.ps1 -AutomationMSI_ID "<Your-Automation-Account-MSI-Object-ID>"
+   ```
+   Or you can use the script as an Azure Automation runbook:
+   - Import `Add-GraphPermissions.ps1` as a runbook
+   - Update the parameter value with your MSI Object ID
+   - Run the runbook manually
+   - Check the output to ensure permissions were assigned successfully
 
 ### 3. Create a Security Group
 1. Create a security group in Microsoft 365 containing users who should receive contacts
 2. Note the Object ID of the group
 
 ### 4. Set Up Azure Automation
-1. Create an Azure Automation account
-2. Import the Az modules and any other required modules
-3. Create the following Automation variables:
-   - `ClientId`: The Application (client) ID from the App Registration
-   - `ClientSecret`: The client secret from the App Registration
-   - `TenantId`: Your tenant ID
+1. Create an Azure Automation account (if not already done)
+2. Import the Az modules (`Az.Accounts` minimum required)
+3. Create the following Automation variable (optional):
    - `ExclusionList` (optional): Line-separated list of user emails to exclude
 
 ### 5. Import the Scripts as Runbooks
@@ -128,7 +128,7 @@ The application requires the following Microsoft Graph API permissions:
 ### ContactsSync.ps1
 The primary script that handles the synchronization of contacts.
 
-1. **Authentication**: Uses client credentials flow to obtain an access token for the Microsoft Graph API, managing token expiration and refresh automatically.
+1. **Authentication**: Uses the Azure Automation account's Managed Identity to obtain an access token for the Microsoft Graph API, managing token expiration and refresh automatically.
 2. **Data Retrieval**: Retrieves all licensed users from the Microsoft 365 tenant, filters based on exclusion list and license status, and retrieves all members of the target security group.
 3. **Contact Synchronization**: For each user in the target group, retrieves existing contacts, creates new contacts for users that don't exist in the contact list, updates existing contacts if user information has changed, and removes contacts for users who are no longer in the organization.
 4. **Performance Optimization**: Attempts to use batch operations for better performance, with fallback to individual operations if needed. Implements throttling detection and exponential backoff.
@@ -158,6 +158,14 @@ A diagnostic script for analyzing contact data for a specific user.
 2. Analyzes contacts for duplicates based on display name
 3. Reports on contact categories and their distribution
 4. Provides detailed output for diagnosing contact-related issues
+
+### Add-GraphPermissions.ps1
+A helper script for assigning Graph API permissions to your Automation Account's Managed Identity.
+
+1. Connects to Microsoft Graph using your credentials (requires AppRoleAssignment.ReadWrite.All and Application.Read.All)
+2. Retrieves the Microsoft Graph Service Principal
+3. Assigns the necessary permissions (Contacts.ReadWrite, User.Read.All, Group.Read.All) to the specified Managed Identity
+4. Reports on successful assignments
 
 ## Mobile Device Configuration
 
@@ -196,11 +204,21 @@ For a smooth migration, use the following workflow:
 5. If needed, run DeleteContactFolder.ps1 to remove any remaining Administrator folders
 6. Start the regular ContactsSync.ps1 process
 
+## Advantages of Managed Identity Authentication
+
+The updated scripts now use Azure Automation's Managed Identity for authentication, which provides several benefits:
+
+1. **Enhanced Security**: No need to store client secrets or credentials in variables
+2. **Simplified Management**: Automatic credential rotation without manual updates
+3. **Reduced Administrative Overhead**: No need to monitor expiring secrets
+4. **Compliance**: Better alignment with modern security best practices
+
 ## Troubleshooting
 
 ### Common Issues
-- **Authentication failures**: Verify the client ID, client secret, and tenant ID
-- **Permission errors**: Ensure the application has the required Graph API permissions
+- **Authentication failures**: Verify that your Managed Identity has been granted the required Graph API permissions
+- **Permission errors**: Ensure the Managed Identity has the required Graph API permissions by running the Add-GraphPermissions.ps1 script
+- **Az PowerShell errors**: Make sure the Az.Accounts module is imported into your Automation account
 - **Performance issues**: Adjust the `MaxConcurrentUsers` parameter
 - **Missing contacts**: Check the exclusion list and verify user license status
 - **Duplicate contacts**: Run ContactDiagnostic.ps1 to identify duplicates, then use ContactCleanup.ps1 to resolve them
@@ -224,7 +242,16 @@ To customize the contact properties:
 
 ## Maintenance
 - Periodically check the Azure Automation job history for errors
-- Update the client secret when it expires
 - Review and update the exclusion list as needed
 - Run ContactDiagnostic.ps1 periodically to check for contact issues
 - Run ContactCleanup.ps1 if duplicate contacts are reported
+
+## Migrating from App Registration to Managed Identity
+If you're migrating from the previous version that used App Registration:
+
+1. Enable System-Assigned Managed Identity on your Automation Account
+2. Run Add-GraphPermissions.ps1 to assign the necessary permissions
+3. Update your runbooks to the latest versions that use Managed Identity authentication
+4. Test with a single user before full deployment
+5. After confirming functionality, you can safely delete the previous App Registration
+6. Remove the ClientId, ClientSecret, and TenantId variables from your Automation Account
