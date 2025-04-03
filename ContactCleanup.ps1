@@ -16,8 +16,9 @@
     
 .NOTES
     Author:         Based on Ryan Schultz's ContactsSync.ps1
-    Version:        1.0
+    Version:        1.1
     Creation Date:  March 2025
+    Modified Date:  April 2025
     
 .PARAMETER TargetGroupId
     The Microsoft 365 group ID containing users whose contacts should be cleaned up
@@ -73,33 +74,42 @@ function Write-Log {
     Write-Output $logEntry
 }
 
-# Token management
+# Token management with Managed Identity
 function Connect-ToMicrosoftGraph {
     try {
-        $clientId = Get-AutomationVariable -Name "ClientId"
-        $clientSecret = Get-AutomationVariable -Name "ClientSecret" 
-        $tenantId = Get-AutomationVariable -Name "TenantId"
+        Write-Log "Acquiring Microsoft Graph token using Managed Identity via Az modules..."
         
-        Write-Log "Acquiring Microsoft Graph token..."
+        Connect-AzAccount -Identity | Out-Null
         
-        $tokenUrl = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
-        $body = @{
-            grant_type    = "client_credentials"
-            client_id     = $clientId
-            client_secret = $clientSecret
-            scope         = "https://graph.microsoft.com/.default"
+        $cmdInfo = Get-Command Get-AzAccessToken -ErrorAction SilentlyContinue
+        $hasAsSecureStringParam = $false
+        
+        if ($cmdInfo -and $cmdInfo.Parameters.ContainsKey("AsSecureString")) {
+            $hasAsSecureStringParam = $true
         }
         
-        $tokenResponse = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $body -ContentType "application/x-www-form-urlencoded"
-        $script:GraphAccessToken = $tokenResponse.access_token
-        $script:TokenExpiresIn = $tokenResponse.expires_in
-        $script:TokenAcquiredTime = Get-Date
+        if ($hasAsSecureStringParam) {
+            $secureToken = (Get-AzAccessToken -ResourceUrl "https://graph.microsoft.com" -AsSecureString).Token
+            $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+            $token = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+        } else {
+            $token = (Get-AzAccessToken -ResourceUrl "https://graph.microsoft.com").Token
+        }
         
-        Write-Log "Successfully acquired Microsoft Graph API token"
+        if ([string]::IsNullOrEmpty($token)) {
+            throw "Failed to acquire token from managed identity"
+        }
+        
+        $script:GraphAccessToken = $token
+        $script:TokenAcquiredTime = Get-Date
+        $script:TokenExpiresIn = 3600
+        
+        Write-Log "Successfully acquired Microsoft Graph API token via Managed Identity"
         return $true
     }
     catch {
-        Write-Log "Failed to connect to Microsoft Graph API: $($_.Exception.Message)" -Level "ERROR"
+        Write-Log "Failed to connect to Microsoft Graph API using Managed Identity: $($_.Exception.Message)" -Level "ERROR"
         throw $_
     }
 }
