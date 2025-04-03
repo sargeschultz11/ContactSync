@@ -246,12 +246,3 @@ To customize the contact properties:
 - Run ContactDiagnostic.ps1 periodically to check for contact issues
 - Run ContactCleanup.ps1 if duplicate contacts are reported
 
-## Migrating from App Registration to Managed Identity
-If you're migrating from the previous version that used App Registration:
-
-1. Enable System-Assigned Managed Identity on your Automation Account
-2. Run Add-GraphPermissions.ps1 to assign the necessary permissions
-3. Update your runbooks to the latest versions that use Managed Identity authentication
-4. Test with a single user before full deployment
-5. After confirming functionality, you can safely delete the previous App Registration
-6. Remove the ClientId, ClientSecret, and TenantId variables from your Automation Account
