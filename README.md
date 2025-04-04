@@ -56,7 +56,7 @@ The Managed Identity requires the following Microsoft Graph API permissions:
 1. Import the `Add-GraphPermissions.ps1` script into your Azure environment
 2. Run the script with the Object ID from your Automation Account's Managed Identity:
    ```powershell
-   ./Add-GraphPermissions.ps1 -AutomationMSI_ID "<Your-Automation-Account-MSI-Object-ID>"
+   .\Add-GraphPermissions.ps1 -AutomationMSI_ID "<Your-Automation-Account-MSI-Object-ID>"
    ```
    Or you can use the script as an Azure Automation runbook:
    - Import `Add-GraphPermissions.ps1` as a runbook
