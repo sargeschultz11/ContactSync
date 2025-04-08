@@ -381,7 +381,7 @@ function Get-AllLicensedUsers {
                 Department = $_.department
                 BusinessPhone = if ($_.businessPhones.Count -gt 0) { $_.businessPhones[0] } else { "" }
                 MobilePhone = $_.mobilePhone
-                CompanyName = if ([string]::IsNullOrEmpty($_.companyName)) { "S.C. Swiderski, LLC" } else { $_.companyName }
+                CompanyName = if ([string]::IsNullOrEmpty($_.companyName)) { "-" } else { $_.companyName }
             }
         }
         
