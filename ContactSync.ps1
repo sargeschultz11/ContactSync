@@ -17,7 +17,7 @@
     
 .NOTES
     Author:         Ryan Schultz
-    Version:        2.2
+    Version:        2.3
     Creation Date:  March 2025
     
 .PARAMETER TargetGroupId
@@ -50,14 +50,16 @@ param(
     [bool]$UpdateExistingContacts = $true,
     [bool]$IncludeExternalContacts = $true,
     [int]$MaxConcurrentUsers = 5,
-    [bool]$UseBatchOperations = $true
+    [bool]$UseBatchOperations = $true,
+    [Parameter(Mandatory = $false)]
+    [string]$CharacterEncoding = "UTF-8"
 )
 
 # Global variables
 $ErrorActionPreference = "Stop"
 $script:GraphAccessToken = $null
 $script:TokenAcquiredTime = $null
-$script:TokenExpiresIn = 3600 # Default 1 hour (in seconds)
+$script:TokenExpiresIn = 3600
 $script:Throttled = $false
 $script:BatchOperationsSupported = $UseBatchOperations
 
@@ -154,8 +156,9 @@ function Invoke-GraphRequest {
         
         $headers = @{
             "Authorization" = "Bearer $script:GraphAccessToken"
-            "Content-Type" = $ContentType
+            "Content-Type" = "$ContentType; charset=utf-8"
             "ConsistencyLevel" = "eventual"
+            "Accept-Charset" = "utf-8"
         }
         
         $params = @{
@@ -166,7 +169,11 @@ function Invoke-GraphRequest {
         
         if ($null -ne $Body -and $Method -ne "GET") {
             if ($ContentType -eq "application/json") {
-                $params.Body = ($Body | ConvertTo-Json -Depth 10)
+                # Convert the body to JSON with UTF-8 encoding
+                $jsonBody = ConvertTo-Json -InputObject $Body -Depth 10
+                $utf8Encoding = [System.Text.Encoding]::UTF8
+                $params.Body = $utf8Encoding.GetBytes($jsonBody)
+                $params.Headers["Content-Length"] = $params.Body.Length
             }
             else {
                 $params.Body = $Body
@@ -174,7 +181,7 @@ function Invoke-GraphRequest {
         }
         
         $retryCount = 0
-        $retryDelay = 2 # Initial retry delay in seconds
+        $retryDelay = 2
         $success = $false
         $response = $null
         
@@ -191,7 +198,6 @@ function Invoke-GraphRequest {
                     $statusCode = [int]$_.Exception.Response.StatusCode
                 }
                 
-                # Check for throttling or temporary errors
                 if ($statusCode -eq 429 -or $statusCode -eq 503 -or $statusCode -eq 504) {
                     $retryCount++
                     $script:Throttled = $true
@@ -381,7 +387,7 @@ function Get-AllLicensedUsers {
                 Department = $_.department
                 BusinessPhone = if ($_.businessPhones.Count -gt 0) { $_.businessPhones[0] } else { "" }
                 MobilePhone = $_.mobilePhone
-                CompanyName = if ([string]::IsNullOrEmpty($_.companyName)) { "S.C. Swiderski, LLC" } else { $_.companyName }
+                CompanyName = if ([string]::IsNullOrEmpty($_.companyName)) { "-" } else { $_.companyName }
             }
         }
         
@@ -439,6 +445,11 @@ function New-ContactObject {
         [Parameter(Mandatory = $true)]
         [PSCustomObject]$ContactData
     )
+
+    # Ensure all text fields are properly encoded
+    $displayName = [System.Web.HttpUtility]::HtmlEncode($ContactData.DisplayName)
+    $givenName = [System.Web.HttpUtility]::HtmlEncode($ContactData.GivenName)
+    $surname = [System.Web.HttpUtility]::HtmlEncode($ContactData.Surname)
     
     $contactObject = @{
         givenName = $ContactData.GivenName
@@ -598,8 +609,6 @@ function Sync-UserContacts {
         
         if ($operations.Count -gt 0) {
             $responses = Execute-ContactOperations -Operations $operations -UserId $User.id
-            
-            # Check for errors
             $errors = $responses | Where-Object { $_.status -ge 400 }
             if ($errors -and $errors.Count -gt 0) {
                 Write-Log "Some contact operations failed for $($User.userPrincipalName): $($errors.Count) errors" -Level "WARNING"
