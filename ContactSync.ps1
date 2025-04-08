@@ -345,6 +345,12 @@ function Get-AllLicensedUsers {
     try {
         Write-Log "Retrieving all licensed users from Microsoft Graph..."
         
+        $normalizedExclusionList = @()
+        if ($ExclusionList -and $ExclusionList.Count -gt 0) {
+            $normalizedExclusionList = $ExclusionList | ForEach-Object { $_.ToLower().Trim() }
+            Write-Log "Normalized $($normalizedExclusionList.Count) entries in exclusion list"
+        }
+        
         $filter = "userType eq 'Member'"
         if (-not $IncludeExternalContacts) {
             $filter += " and onPremisesSyncEnabled eq true"
@@ -371,7 +377,13 @@ function Get-AllLicensedUsers {
         $licensedUsers = $allUsers | Where-Object { 
             $_.assignedLicenses.Count -gt 0 -and
             $_.accountEnabled -eq $true -and
-            $_.userPrincipalName -notin $ExclusionList
+            (
+                ($normalizedExclusionList.Count -eq 0) -or 
+                (
+                    ($_.userPrincipalName -and ($_.userPrincipalName.ToLower().Trim() -notin $normalizedExclusionList)) -and
+                    ((-not $_.mail) -or ($_.mail -and ($_.mail.ToLower().Trim() -notin $normalizedExclusionList)))
+                )
+            )
         }
         
         Write-Log "Found $($licensedUsers.Count) licensed users to be used as contacts"
