@@ -53,7 +53,7 @@ The Managed Identity requires the following Microsoft Graph API permissions:
 4. Copy the Object ID - you'll need this to assign API permissions
 
 ### 2. Assign API Permissions to Managed Identity
-1. Run the `Add-GraphPermissions.ps1` script from a local machine with an account with gloab admin permissions
+1. Run the `Add-GraphPermissions.ps1` script from a local machine with an account with global admin permissions
 2. Run the script with the Object ID from your Automation Account's Managed Identity:
    ```powershell
    .\Add-GraphPermissions.ps1 -AutomationMSI_ID "<Your-Automation-Account-MSI-Object-ID>"
