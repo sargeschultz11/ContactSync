@@ -169,11 +169,7 @@ function Invoke-GraphRequest {
         
         if ($null -ne $Body -and $Method -ne "GET") {
             if ($ContentType -eq "application/json") {
-                # Convert the body to JSON with UTF-8 encoding
-                $jsonBody = ConvertTo-Json -InputObject $Body -Depth 10
-                $utf8Encoding = [System.Text.Encoding]::UTF8
-                $params.Body = $utf8Encoding.GetBytes($jsonBody)
-                $params.Headers["Content-Length"] = $params.Body.Length
+                $params.Body = ConvertTo-Json -InputObject $Body -Depth 10
             }
             else {
                 $params.Body = $Body
@@ -459,9 +455,9 @@ function New-ContactObject {
     )
 
     # Ensure all text fields are properly encoded
-    $displayName = [System.Web.HttpUtility]::HtmlEncode($ContactData.DisplayName)
-    $givenName = [System.Web.HttpUtility]::HtmlEncode($ContactData.GivenName)
-    $surname = [System.Web.HttpUtility]::HtmlEncode($ContactData.Surname)
+    # $displayName = [System.Web.HttpUtility]::HtmlEncode($ContactData.DisplayName)
+    # $givenName = [System.Web.HttpUtility]::HtmlEncode($ContactData.GivenName)
+    # $surname = [System.Web.HttpUtility]::HtmlEncode($ContactData.Surname)
     
     $contactObject = @{
         givenName = $ContactData.GivenName
