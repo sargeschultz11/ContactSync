@@ -4,11 +4,11 @@
     Assigns Microsoft Graph API permissions to an Azure Automation Account's System-Assigned Managed Identity.
     
 .DESCRIPTION
-    This script assigns the necessary Microsoft Graph API permissions to allow the ContactSync solution
+    This script assigns the necessary Microsoft Graph API permissions to allow the runbook solution
     to authenticate using a System-Assigned Managed Identity instead of an App Registration.
     
 .NOTES
-    Author:         Based on S.C. Swiderski's ContactSync solution
+    Author:         Ryan Schultz
     Version:        1.0
     Creation Date:  April 2025
     
@@ -94,28 +94,4 @@ foreach ($permission in $GraphPermissionsList) {
 }
 
 Write-Host "Permissions assignment completed" -ForegroundColor Green
-Write-Host ""
-Write-Host "NEXT STEPS:" -ForegroundColor Cyan
-Write-Host "1. Modify your ContactSync scripts to use Managed Identity authentication instead of client credentials" -ForegroundColor White
-Write-Host "2. Remove the ClientId, ClientSecret, and TenantId variables from your Automation Account" -ForegroundColor White
-Write-Host "3. Update the 'Connect-ToMicrosoftGraph' function in your scripts to use the Managed Identity" -ForegroundColor White
-Write-Host ""
-Write-Host "Example code for Managed Identity authentication:" -ForegroundColor Cyan
-Write-Host "function Connect-ToMicrosoftGraph {" -ForegroundColor White
-Write-Host "    try {" -ForegroundColor White
-Write-Host "        Write-Log 'Acquiring Microsoft Graph token using Managed Identity...'" -ForegroundColor White
-Write-Host "        " -ForegroundColor White
-Write-Host "        # Get the access token using the Managed Identity" -ForegroundColor White
-Write-Host "        $response = Invoke-RestMethod -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://graph.microsoft.com' -Headers @{Metadata='true'} -Method GET" -ForegroundColor White
-Write-Host "        $script:GraphAccessToken = $response.access_token" -ForegroundColor White
-Write-Host "        $script:TokenExpiresIn = $response.expires_in" -ForegroundColor White
-Write-Host "        $script:TokenAcquiredTime = Get-Date" -ForegroundColor White
-Write-Host "        " -ForegroundColor White
-Write-Host "        Write-Log 'Successfully acquired Microsoft Graph API token'" -ForegroundColor White
-Write-Host "        return $true" -ForegroundColor White
-Write-Host "    }" -ForegroundColor White
-Write-Host "    catch {" -ForegroundColor White
-Write-Host "        Write-Log \"Failed to connect to Microsoft Graph API: $($_.Exception.Message)\" -Level \"ERROR\"" -ForegroundColor White
-Write-Host "        throw $_" -ForegroundColor White
-Write-Host "    }" -ForegroundColor White
-Write-Host "}" -ForegroundColor White
+Disconnect-MgGraph
