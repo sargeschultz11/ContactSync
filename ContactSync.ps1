@@ -17,7 +17,7 @@
     
 .NOTES
     Author:         Ryan Schultz
-    Version:        2.3.1
+    Version:        2.3.2
     Creation Date:  March 2025
     
 .PARAMETER TargetGroupId
@@ -492,7 +492,7 @@ function Get-ContactHash {
         [object]$Contact
     )
     
-    $hashStr = "$($Contact.givenName)#$($Contact.surname)#$($Contact.jobTitle)#$($Contact.department)"
+    $hashStr = "$($Contact.givenName)#$($Contact.surname)#$($Contact.jobTitle)#$($Contact.department)#$($Contact.companyName)"
     
     if ($Contact.businessPhones -and $Contact.businessPhones.Count -gt 0) {
         $hashStr += "#$($Contact.businessPhones[0])"
