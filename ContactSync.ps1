@@ -492,7 +492,7 @@ function Get-ContactHash {
         [object]$Contact
     )
     
-    $hashStr = "$($Contact.givenName)#$($Contact.surname)#$($Contact.jobTitle)#$($Contact.department)"
+    $hashStr = "$($Contact.givenName)#$($Contact.surname)#$($Contact.jobTitle)#$($Contact.department)#$($Contact.companyName)"
     
     if ($Contact.businessPhones -and $Contact.businessPhones.Count -gt 0) {
         $hashStr += "#$($Contact.businessPhones[0])"
