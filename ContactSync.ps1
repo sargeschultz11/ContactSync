@@ -169,7 +169,7 @@ function Invoke-GraphRequest {
         
         if ($null -ne $Body -and $Method -ne "GET") {
             if ($ContentType -eq "application/json") {
-                $params.Body = ConvertTo-Json -InputObject $Body -Depth 10
+                $params.Body = ConvertTo-Json -InputObject $Body -Depth 10 -Encoding UTF8
             }
             else {
                 $params.Body = $Body
