@@ -17,7 +17,7 @@
     
 .NOTES
     Author:         Ryan Schultz
-    Version:        2.3.2
+    Version:        2.3.3
     Creation Date:  March 2025
     
 .PARAMETER TargetGroupId
