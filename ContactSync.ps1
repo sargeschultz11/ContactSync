@@ -14,19 +14,14 @@
     - Supports exclusion lists for specific users
     - Configurable to include or exclude cloud only users (optional)
     - Optimized performance with fallback for compatibility
-    - Supports targeting specific user groups for contact source (optional)
     
 .NOTES
     Author:         Ryan Schultz
-    Version:        2.4.0
+    Version:        2.3.4
     Creation Date:  March 2025
     
 .PARAMETER TargetGroupId
     The Microsoft 365 group ID containing users who should receive the contacts
-    
-.PARAMETER SourceGroupId
-    Optional. The Microsoft 365 group ID containing users who should be synchronized as contacts.
-    If not specified, all licensed users in the tenant will be used.
     
 .PARAMETER ExclusionListVariableName
     The name of the Automation variable containing users to exclude from synchronization (line separated list)
@@ -50,8 +45,6 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$TargetGroupId, 
-    [Parameter(Mandatory = $false)]
-    [string]$SourceGroupId = "",
     [string]$ExclusionListVariableName = "ExclusionList",
     [bool]$RemoveDeletedContacts = $true,
     [bool]$UpdateExistingContacts = $true,
@@ -348,78 +341,6 @@ function Get-ExclusionList {
         $errorMessage = $_.Exception.Message
         Write-Log "Error loading exclusion list: $errorMessage" -Level "WARNING"
         return @()
-    }
-}
-
-function Get-UsersFromGroup {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$GroupId,
-        
-        [Parameter(Mandatory = $false)]
-        [string[]]$ExclusionList = @()
-    )
-    
-    try {
-        Write-Log "Retrieving members from group $GroupId to use as contacts..."
-        
-        $normalizedExclusionList = @()
-        if ($ExclusionList -and $ExclusionList.Count -gt 0) {
-            $normalizedExclusionList = $ExclusionList | ForEach-Object { $_.ToLower().Trim() }
-        }
-        
-        $uri = "/groups/$GroupId/members?`$select=id,userPrincipalName,displayName,givenName,surname,mail,jobTitle,department,businessPhones,mobilePhone,companyName,accountEnabled,assignedLicenses&`$top=999"
-        
-        $allUsers = @()
-        
-        do {
-            $response = Invoke-GraphRequest -Method "GET" -Uri $uri
-            
-            if ($response -and $response.value) {
-                $allUsers += $response.value
-            }
-            
-            $uri = $null
-            if ($response.'@odata.nextLink') {
-                $uri = $response.'@odata.nextLink' -replace "https://graph.microsoft.com/v1.0", ""
-            }
-        } while ($uri)
-        
-        $licensedUsers = $allUsers | Where-Object { 
-            $_.'@odata.type' -like "*#microsoft.graph.user*" -and
-            $_.assignedLicenses.Count -gt 0 -and
-            $_.accountEnabled -eq $true -and
-            (
-                ($normalizedExclusionList.Count -eq 0) -or 
-                (
-                    ($_.userPrincipalName -and ($_.userPrincipalName.ToLower().Trim() -notin $normalizedExclusionList)) -and
-                    ((-not $_.mail) -or ($_.mail -and ($_.mail.ToLower().Trim() -notin $normalizedExclusionList)))
-                )
-            )
-        }
-        
-        Write-Log "Found $($licensedUsers.Count) licensed users in group to be used as contacts"
-        
-        $contactsToSync = $licensedUsers | ForEach-Object {
-            [PSCustomObject]@{
-                Id = $_.id
-                DisplayName = $_.displayName
-                GivenName = $_.givenName
-                Surname = $_.surname
-                EmailAddress = $_.mail
-                JobTitle = $_.jobTitle
-                Department = $_.department
-                BusinessPhone = if ($_.businessPhones.Count -gt 0) { $_.businessPhones[0] } else { "" }
-                MobilePhone = $_.mobilePhone
-                CompanyName = if ([string]::IsNullOrEmpty($_.companyName)) { "-" } else { $_.companyName }
-            }
-        }
-        
-        return $contactsToSync
-    }
-    catch {
-        Write-Log "Error retrieving users from group: $($_.Exception.Message)" -Level "ERROR"
-        throw $_
     }
 }
 
@@ -732,22 +653,16 @@ function Sync-UserContacts {
 try {
     $startTime = Get-Date
     Write-Log "Starting optimized ContactSync process"
-    Write-Log "Parameters: TargetGroupId=$TargetGroupId, SourceGroupId=$SourceGroupId, RemoveDeletedContacts=$RemoveDeletedContacts, UpdateExistingContacts=$UpdateExistingContacts, IncludeExternalContacts=$IncludeExternalContacts, MaxConcurrentUsers=$MaxConcurrentUsers, UseBatchOperations=$UseBatchOperations"
+    Write-Log "Parameters: RemoveDeletedContacts=$RemoveDeletedContacts, UpdateExistingContacts=$UpdateExistingContacts, IncludeExternalContacts=$IncludeExternalContacts, MaxConcurrentUsers=$MaxConcurrentUsers, UseBatchOperations=$UseBatchOperations"
     
     Connect-ToMicrosoftGraph
     
     $exclusionList = Get-ExclusionList
     
-    if ([string]::IsNullOrEmpty($SourceGroupId)) {
-        Write-Log "No SourceGroupId specified. Using all licensed users as contacts."
-        $allUsersAsContacts = Get-AllLicensedUsers -ExclusionList $exclusionList
-    } else {
-        Write-Log "Using members from group $SourceGroupId as contacts."
-        $allUsersAsContacts = Get-UsersFromGroup -GroupId $SourceGroupId -ExclusionList $exclusionList
-    }
+    $allUsersAsContacts = Get-AllLicensedUsers -ExclusionList $exclusionList
     
     if ($allUsersAsContacts.Count -eq 0) {
-        Write-Log "No users found to use as contacts. Exiting." -Level "WARNING"
+        Write-Log "No licensed users found to use as contacts. Exiting." -Level "WARNING"
         exit
     }
     
