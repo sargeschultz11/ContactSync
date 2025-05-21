@@ -21,6 +21,7 @@ This repository contains a suite of PowerShell scripts for managing Microsoft 36
 - Optimized performance with batch operations and fallback mechanisms
 - Throttling detection and handling
 - Support for Azure Automation Managed Identity authentication (improved security)
+- Support for organization-specific contact groups (multi-tenant environments)
 
 ## Included Scripts
 
@@ -86,6 +87,7 @@ The Managed Identity requires the following Microsoft Graph API permissions:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `TargetGroupId` | string | Required | The Microsoft 365 group ID containing users who should receive the contacts |
+| `SourceGroupId` | string | "" (empty) | The Microsoft 365 group ID containing users who should be synchronized as contacts. If not specified, all licensed users in the tenant will be used. |
 | `ExclusionListVariableName` | string | "ExclusionList" | The name of the Automation variable containing users to exclude |
 | `RemoveDeletedContacts` | bool | true | Whether to remove contacts that no longer exist in the source |
 | `UpdateExistingContacts` | bool | true | Whether to update existing contacts with current information |
@@ -124,7 +126,11 @@ The Managed Identity requires the following Microsoft Graph API permissions:
 The primary script that handles the synchronization of contacts.
 
 1. **Authentication**: Uses the Azure Automation account's Managed Identity to obtain an access token for the Microsoft Graph API, managing token expiration and refresh automatically.
-2. **Data Retrieval**: Retrieves all licensed users from the Microsoft 365 tenant, filters based on exclusion list and license status, and retrieves all members of the target security group.
+2. **Data Retrieval**: 
+   - If `SourceGroupId` is specified, retrieves users from that group to use as contacts.
+   - If `SourceGroupId` is not specified, retrieves all licensed users from the Microsoft 365 tenant.
+   - Filters based on exclusion list and license status.
+   - Retrieves all members of the target security group who will receive the contacts.
 3. **Contact Synchronization**: For each user in the target group, retrieves existing contacts, creates new contacts for users that don't exist in the contact list, updates existing contacts if user information has changed, and removes contacts for users who are no longer in the organization.
 4. **Performance Optimization**: Attempts to use batch operations for better performance, with fallback to individual operations if needed. Implements throttling detection and exponential backoff.
 
@@ -224,6 +230,23 @@ The updated scripts now use Azure Automation's Managed Identity for authenticati
 3. View the Output tab to see detailed logs
 
 ## Advanced Configuration
+
+### Multi-Organization Contact Management
+To manage contacts for multiple organizations within a single tenant:
+
+1. Create security groups for each organization (e.g., "OrgA-Contacts", "OrgB-Contacts")
+2. Add the appropriate users to each group
+3. Create separate schedules for each organization with different parameters:
+   ```
+   Schedule 1:
+   - TargetGroupId: [Group ID for OrgA-Users]
+   - SourceGroupId: [Group ID for OrgA-Contacts]
+   
+   Schedule 2:
+   - TargetGroupId: [Group ID for OrgB-Users] 
+   - SourceGroupId: [Group ID for OrgB-Contacts]
+   ```
+4. This ensures that users in Organization A only see contacts from Organization A, and users in Organization B only see contacts from Organization B.
 
 ### Excluding Users
 To exclude specific users from being created as contacts:
