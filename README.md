@@ -86,12 +86,14 @@ The Managed Identity requires the following Microsoft Graph API permissions:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `TargetGroupId` | string | Required | The Microsoft 365 group ID containing users who should receive the contacts |
+| `SourceGroupId` | string | "" | The Microsoft 365 group ID containing users who should be synchronized as contacts. If not specified, all licensed users in the tenant will be used. |
 | `ExclusionListVariableName` | string | "ExclusionList" | The name of the Automation variable containing users to exclude |
 | `RemoveDeletedContacts` | bool | true | Whether to remove contacts that no longer exist in the source |
 | `UpdateExistingContacts` | bool | true | Whether to update existing contacts with current information |
 | `IncludeExternalContacts` | bool | true | Whether to include cloud-only users in the contact synchronization |
 | `MaxConcurrentUsers` | int | 5 | Maximum number of concurrent users to process |
 | `UseBatchOperations` | bool | true | Whether to attempt using batch operations (will fall back if needed) |
+| `CharacterEncoding` | string | "UTF-8" | Character encoding to use for string handling |
 
 ## ContactCleanup.ps1 Parameters
 
@@ -230,21 +232,30 @@ The updated scripts now use Azure Automation's Managed Identity for authenticati
 ## Advanced Configuration
 
 ### Multi-Organization Contact Management
-To manage contacts for multiple organizations within a single tenant:
 
-1. Create security groups for each organization (e.g., "OrgA-Contacts", "OrgB-Contacts")
-2. Add the appropriate users to each group
-3. Create separate schedules for each organization with different parameters:
+The `SourceGroupId` parameter enables managing contacts for multiple organizations within a single tenant, addressing scenarios where organizational boundaries need to be maintained for contact visibility.
+
+To implement organization-specific contact lists:
+
+1. **Create security groups** for each organization (e.g., "OrgA-Contacts", "OrgB-Contacts")
+2. **Add the appropriate users** to each group
+3. **Create separate runbook schedules** for each organization with different parameters:
    ```
    Schedule 1:
-   - TargetGroupId: [Group ID for OrgA-Users]
-   - SourceGroupId: [Group ID for OrgA-Users]
+   - TargetGroupId: [Group ID for OrgA-Users]  # Users who will receive contacts
+   - SourceGroupId: [Group ID for OrgA-Users]  # Users who will be created as contacts
    
    Schedule 2:
-   - TargetGroupId: [Group ID for OrgB-Users] 
-   - SourceGroupId: [Group ID for OrgB-Users]
+   - TargetGroupId: [Group ID for OrgB-Users]  # Users who will receive contacts
+   - SourceGroupId: [Group ID for OrgB-Users]  # Users who will be created as contacts
    ```
-4. This ensures that users in Organization A only see contact details for other users from Organization A, and users in Organization B only see contacts from Organization B.
+4. This configuration ensures that **users in Organization A only see contact details for other users from Organization A**, and similarly for Organization B.
+
+This approach is especially valuable for:
+- Shared tenants hosting multiple business units
+- Holding companies with independent subsidiaries
+- Educational institutions with separate departments or schools
+- Government agencies with distinct organizational boundaries
 
 ### Excluding Users
 To exclude specific users from being created as contacts:
