@@ -17,7 +17,7 @@
     
 .NOTES
     Author:         Ryan Schultz
-    Version:        2.3.3
+    Version:        2.3.4
     Creation Date:  March 2025
     
 .PARAMETER TargetGroupId
@@ -54,6 +54,10 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$CharacterEncoding = "UTF-8"
 )
+
+# Ensure PowerShell uses UTF-8 for all output and string handling (important for umlauts/diacritics)
+$OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Global variables
 $ErrorActionPreference = "Stop"
@@ -156,8 +160,9 @@ function Invoke-GraphRequest {
         
         $headers = @{
             "Authorization" = "Bearer $script:GraphAccessToken"
-            "Content-Type" = "$ContentType; charset=utf-8"
+            "Content-Type" = "application/json; charset=utf-8"
             "ConsistencyLevel" = "eventual"
+            "Accept" = "application/json; charset=utf-8"
             "Accept-Charset" = "utf-8"
         }
         
@@ -169,7 +174,13 @@ function Invoke-GraphRequest {
         
         if ($null -ne $Body -and $Method -ne "GET") {
             if ($ContentType -eq "application/json") {
-                $params.Body = ConvertTo-Json -InputObject $Body -Depth 10 -Encoding UTF8
+                # Use UTF8 encoding explicitly for the JSON conversion
+                $bodyJson = ConvertTo-Json -InputObject $Body -Depth 10
+                $utf8Encoding = [System.Text.Encoding]::UTF8
+                $params.Body = $utf8Encoding.GetBytes($bodyJson)
+                
+                # Make sure to use the correct content type with encoding
+                $params.Headers["Content-Type"] = "application/json; charset=utf-8"
             }
             else {
                 $params.Body = $Body
