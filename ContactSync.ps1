@@ -14,14 +14,19 @@
     - Supports exclusion lists for specific users
     - Configurable to include or exclude cloud only users (optional)
     - Optimized performance with fallback for compatibility
+    - Support for organization-specific contact lists via source group filtering
     
 .NOTES
     Author:         Ryan Schultz
-    Version:        2.3.4
+    Version:        2.4.0
     Creation Date:  March 2025
     
 .PARAMETER TargetGroupId
     The Microsoft 365 group ID containing users who should receive the contacts
+    
+.PARAMETER SourceGroupId
+    The Microsoft 365 group ID containing users who should be synchronized as contacts.
+    If not specified, all licensed users in the tenant will be used.
     
 .PARAMETER ExclusionListVariableName
     The name of the Automation variable containing users to exclude from synchronization (line separated list)
@@ -40,11 +45,16 @@
     
 .PARAMETER UseBatchOperations
     Whether to attempt using batch operations (will fall back to individual operations if needed)
+    
+.PARAMETER CharacterEncoding
+    Character encoding to use for string handling (default is "UTF-8")
 #>
 
 param(
     [Parameter(Mandatory = $true)]
-    [string]$TargetGroupId, 
+    [string]$TargetGroupId,
+    [Parameter(Mandatory = $false)]
+    [string]$SourceGroupId = "",
     [string]$ExclusionListVariableName = "ExclusionList",
     [bool]$RemoveDeletedContacts = $true,
     [bool]$UpdateExistingContacts = $true,
@@ -66,6 +76,7 @@ $script:TokenAcquiredTime = $null
 $script:TokenExpiresIn = 3600
 $script:Throttled = $false
 $script:BatchOperationsSupported = $UseBatchOperations
+$script:OrganizationMappings = @()
 
 # Logging function
 function Write-Log {
@@ -344,6 +355,81 @@ function Get-ExclusionList {
     }
 }
 
+function Get-ContactSourceUsers {
+    param(
+        [string[]]$ExclusionList,
+        [string]$SourceGroupId
+    )
+    
+    try {
+        # If SourceGroupId is specified, get contacts from that group
+        if (-not [string]::IsNullOrEmpty($SourceGroupId)) {
+            Write-Log "Retrieving contacts from source group $SourceGroupId instead of all licensed users..."
+            
+            $sourceGroupMembers = Get-GroupMembers -GroupId $SourceGroupId
+            
+            if ($sourceGroupMembers.Count -eq 0) {
+                Write-Log "No users found in the source group. No contacts will be created." -Level "WARNING"
+                return @()
+            }
+            
+            Write-Log "Found $($sourceGroupMembers.Count) users in the source group"
+            
+            # Get detailed user information for each member
+            $contactsToSync = @()
+            foreach ($member in $sourceGroupMembers) {
+                try {
+                    $userId = $member.id
+                    $uri = "/users/$userId`?`$select=id,userPrincipalName,displayName,givenName,surname,mail,jobTitle,department,businessPhones,mobilePhone,companyName,accountEnabled"
+                    
+                    $userDetail = Invoke-GraphRequest -Method "GET" -Uri $uri
+                    
+                    if ($userDetail -and $userDetail.accountEnabled -eq $true) {
+                        $normalizedExclusionList = @()
+                        if ($ExclusionList -and $ExclusionList.Count -gt 0) {
+                            $normalizedExclusionList = $ExclusionList | ForEach-Object { $_.ToLower().Trim() }
+                        }
+                        
+                        # Skip excluded users
+                        if (($normalizedExclusionList.Count -gt 0) -and 
+                            (($userDetail.userPrincipalName -and ($userDetail.userPrincipalName.ToLower().Trim() -in $normalizedExclusionList)) -or
+                             ($userDetail.mail -and ($userDetail.mail.ToLower().Trim() -in $normalizedExclusionList)))) {
+                            continue
+                        }
+                        
+                        $contactsToSync += [PSCustomObject]@{
+                            Id = $userDetail.id
+                            DisplayName = $userDetail.displayName
+                            GivenName = $userDetail.givenName
+                            Surname = $userDetail.surname
+                            EmailAddress = $userDetail.mail
+                            JobTitle = $userDetail.jobTitle
+                            Department = $userDetail.department
+                            BusinessPhone = if ($userDetail.businessPhones.Count -gt 0) { $userDetail.businessPhones[0] } else { "" }
+                            MobilePhone = $userDetail.mobilePhone
+                            CompanyName = if ([string]::IsNullOrEmpty($userDetail.companyName)) { "-" } else { $userDetail.companyName }
+                        }
+                    }
+                }
+                catch {
+                    Write-Log "Error retrieving details for user $($member.userPrincipalName): $($_.Exception.Message)" -Level "WARNING"
+                }
+            }
+            
+            Write-Log "Prepared $($contactsToSync.Count) contacts from source group for synchronization"
+            return $contactsToSync
+        }
+        else {
+            # Use the original function to get all licensed users if no source group is specified
+            return Get-AllLicensedUsers -ExclusionList $ExclusionList
+        }
+    }
+    catch {
+        Write-Log "Error retrieving source users: $($_.Exception.Message)" -Level "ERROR"
+        throw $_
+    }
+}
+
 function Get-AllLicensedUsers {
     param(
         [string[]]$ExclusionList
@@ -516,6 +602,25 @@ function Get-ContactHash {
     return $hashStr
 }
 
+function Get-ContactHash {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Contact
+    )
+    
+    $hashStr = "$($Contact.givenName)#$($Contact.surname)#$($Contact.jobTitle)#$($Contact.department)#$($Contact.companyName)"
+    
+    if ($Contact.businessPhones -and $Contact.businessPhones.Count -gt 0) {
+        $hashStr += "#$($Contact.businessPhones[0])"
+    }
+    
+    if (-not [string]::IsNullOrEmpty($Contact.mobilePhone)) {
+        $hashStr += "#$($Contact.mobilePhone)"
+    }
+    
+    return $hashStr
+}
+
 function Sync-UserContacts {
     param(
         [Parameter(Mandatory = $true)]
@@ -653,16 +758,17 @@ function Sync-UserContacts {
 try {
     $startTime = Get-Date
     Write-Log "Starting optimized ContactSync process"
-    Write-Log "Parameters: RemoveDeletedContacts=$RemoveDeletedContacts, UpdateExistingContacts=$UpdateExistingContacts, IncludeExternalContacts=$IncludeExternalContacts, MaxConcurrentUsers=$MaxConcurrentUsers, UseBatchOperations=$UseBatchOperations"
+    $sourceDescription = [string]::IsNullOrEmpty($SourceGroupId) ? "all licensed users" : "users from source group $SourceGroupId"
+    Write-Log "Parameters: TargetGroupId=$TargetGroupId, SourceGroupId=$SourceGroupId, RemoveDeletedContacts=$RemoveDeletedContacts, UpdateExistingContacts=$UpdateExistingContacts, IncludeExternalContacts=$IncludeExternalContacts"
     
     Connect-ToMicrosoftGraph
     
     $exclusionList = Get-ExclusionList
     
-    $allUsersAsContacts = Get-AllLicensedUsers -ExclusionList $exclusionList
+    $allUsersAsContacts = Get-ContactSourceUsers -ExclusionList $exclusionList -SourceGroupId $SourceGroupId
     
     if ($allUsersAsContacts.Count -eq 0) {
-        Write-Log "No licensed users found to use as contacts. Exiting." -Level "WARNING"
+        Write-Log "No users found to use as contacts. Exiting." -Level "WARNING"
         exit
     }
     
