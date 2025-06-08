@@ -16,6 +16,7 @@ This repository contains a suite of PowerShell scripts for managing Microsoft 36
 - Creates contacts for all licensed users in the tenant
 - Updates existing contacts when user information changes
 - Removes contacts for deprovisioned users
+- **Organization-specific contact management** - Define which users serve as contacts for different groups
 - Supports exclusion lists for specific users
 - Configurable to include or exclude cloud-only users
 - Optimized performance with batch operations and fallback mechanisms
@@ -86,12 +87,14 @@ The Managed Identity requires the following Microsoft Graph API permissions:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `TargetGroupId` | string | Required | The Microsoft 365 group ID containing users who should receive the contacts |
+| `SourceGroupId` | string | "" | The Microsoft 365 group ID containing users who should be synchronized as contacts. If not specified, all licensed users in the tenant will be used. |
 | `ExclusionListVariableName` | string | "ExclusionList" | The name of the Automation variable containing users to exclude |
 | `RemoveDeletedContacts` | bool | true | Whether to remove contacts that no longer exist in the source |
 | `UpdateExistingContacts` | bool | true | Whether to update existing contacts with current information |
 | `IncludeExternalContacts` | bool | true | Whether to include cloud-only users in the contact synchronization |
 | `MaxConcurrentUsers` | int | 5 | Maximum number of concurrent users to process |
 | `UseBatchOperations` | bool | true | Whether to attempt using batch operations (will fall back if needed) |
+| `CharacterEncoding` | string | "UTF-8" | Character encoding to use for string handling |
 
 ## ContactCleanup.ps1 Parameters
 
@@ -124,7 +127,11 @@ The Managed Identity requires the following Microsoft Graph API permissions:
 The primary script that handles the synchronization of contacts.
 
 1. **Authentication**: Uses the Azure Automation account's Managed Identity to obtain an access token for the Microsoft Graph API, managing token expiration and refresh automatically.
-2. **Data Retrieval**: Retrieves all licensed users from the Microsoft 365 tenant, filters based on exclusion list and license status, and retrieves all members of the target security group.
+2. **Data Retrieval**: 
+   - If `SourceGroupId` is specified, retrieves users from that group to use as contacts.
+   - If `SourceGroupId` is not specified, retrieves all licensed users from the Microsoft 365 tenant.
+   - Filters based on exclusion list and license status.
+   - Retrieves all members of the target security group who will receive the contacts.
 3. **Contact Synchronization**: For each user in the target group, retrieves existing contacts, creates new contacts for users that don't exist in the contact list, updates existing contacts if user information has changed, and removes contacts for users who are no longer in the organization.
 4. **Performance Optimization**: Attempts to use batch operations for better performance, with fallback to individual operations if needed. Implements throttling detection and exponential backoff.
 
@@ -161,6 +168,49 @@ A helper script for assigning Graph API permissions to your Automation Account's
 2. Retrieves the Microsoft Graph Service Principal
 3. Assigns the necessary permissions (Contacts.ReadWrite, User.Read.All, Group.Read.All) to the specified Managed Identity
 4. Reports on successful assignments
+
+## Organization-Specific Contact Management
+
+**New in v1.4.0**: ContactSync now supports organization-specific contact lists, allowing you to manage multiple organizations within a single Microsoft 365 tenant.
+
+### Use Case
+This feature addresses scenarios where:
+- Multiple organizations share a single Azure tenant
+- Users should only see contacts relevant to their organization
+- You want to maintain organizational boundaries for contact visibility
+
+### Setup Example
+To configure organization-specific contacts:
+
+1. **Create Security Groups** (if they don't exist):
+   - `OrgA-Users` - Contains all users from Organization A
+   - `OrgB-Users` - Contains all users from Organization B
+
+2. **Configure Multiple Schedules**:
+   
+   **Schedule 1 - Organization A**:
+   ```powershell
+   # Parameters for Organization A runbook
+   TargetGroupId = "12345678-1234-1234-1234-123456789abc"  # OrgA-Users group ID
+   SourceGroupId = "12345678-1234-1234-1234-123456789abc"  # Same group - OrgA users get OrgA contacts
+   ```
+   
+   **Schedule 2 - Organization B**:
+   ```powershell
+   # Parameters for Organization B runbook  
+   TargetGroupId = "87654321-4321-4321-4321-cba987654321"  # OrgB-Users group ID
+   SourceGroupId = "87654321-4321-4321-4321-cba987654321"  # Same group - OrgB users get OrgB contacts
+   ```
+
+3. **Result**: 
+   - Users in Organization A will only see contacts from Organization A
+   - Users in Organization B will only see contacts from Organization B
+   - No tenant splitting required
+
+### Advanced Scenarios
+- **Cross-organizational contacts**: Set different `TargetGroupId` and `SourceGroupId` to provide one organization's contacts to another
+- **Global directory**: Leave `SourceGroupId` blank to provide all licensed users as contacts to a specific group
+- **Departmental contacts**: Use department-specific groups for more granular control
 
 ## Mobile Device Configuration
 
@@ -225,6 +275,32 @@ The updated scripts now use Azure Automation's Managed Identity for authenticati
 
 ## Advanced Configuration
 
+### Multi-Organization Contact Management
+
+The `SourceGroupId` parameter enables managing contacts for multiple organizations within a single tenant, addressing scenarios where organizational boundaries need to be maintained for contact visibility.
+
+To implement organization-specific contact lists:
+
+1. **Create security groups** for each organization (e.g., "OrgA-Contacts", "OrgB-Contacts")
+2. **Add the appropriate users** to each group
+3. **Create separate runbook schedules** for each organization with different parameters:
+   ```
+   Schedule 1:
+   - TargetGroupId: [Group ID for OrgA-Users]  # Users who will receive contacts
+   - SourceGroupId: [Group ID for OrgA-Users]  # Users who will be created as contacts
+   
+   Schedule 2:
+   - TargetGroupId: [Group ID for OrgB-Users]  # Users who will receive contacts
+   - SourceGroupId: [Group ID for OrgB-Users]  # Users who will be created as contacts
+   ```
+4. This configuration ensures that **users in Organization A only see contact details for other users from Organization A**, and similarly for Organization B.
+
+This approach is especially valuable for:
+- Shared tenants hosting multiple business units
+- Holding companies with independent subsidiaries
+- Educational institutions with separate departments or schools
+- Government agencies with distinct organizational boundaries
+
 ### Excluding Users
 To exclude specific users from being created as contacts:
 1. In Azure Automation, edit the `ExclusionList` variable
@@ -262,6 +338,7 @@ Thanks goes to these wonderful people:
   <tr>
     <td align="center"><a href="https://github.com/sargeschultz11"><img src="https://avatars.githubusercontent.com/sargeschultz11" width="100px;" alt=""/><br /><sub><b>Ryan Schultz</b></sub></a><br /><a href="#code" title="Code">💻</a> <a href="#doc" title="Documentation">📖</a> <a href="#maintenance" title="Maintenance">🚧</a></td>
     <td align="center"><a href="https://github.com/SnakeSK"><img src="https://avatars.githubusercontent.com/SnakeSK" width="100px;" alt=""/><br /><sub><b>SnakeSK</b></sub></a><br /><a href="#bug" title="Bug reports">🐛</a></td>
+    <td align="center"><a href="https://github.com/semidoludizgin"><img src="https://avatars.githubusercontent.com/semidoludizgin" width="100px;" alt=""/><br /><sub><b>semidoludizgin</b></sub></a><br /><a href="#bug" title="Bug reports">🐛</a> <a href="#feat" title="Feature requests">✨</a ></td>
   </tr>
 </table>
 <!-- markdownlint-enable -->
@@ -269,4 +346,3 @@ Thanks goes to these wonderful people:
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
-
