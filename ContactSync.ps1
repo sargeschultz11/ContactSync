@@ -602,25 +602,6 @@ function Get-ContactHash {
     return $hashStr
 }
 
-function Get-ContactHash {
-    param(
-        [Parameter(Mandatory = $true)]
-        [object]$Contact
-    )
-    
-    $hashStr = "$($Contact.givenName)#$($Contact.surname)#$($Contact.jobTitle)#$($Contact.department)#$($Contact.companyName)"
-    
-    if ($Contact.businessPhones -and $Contact.businessPhones.Count -gt 0) {
-        $hashStr += "#$($Contact.businessPhones[0])"
-    }
-    
-    if (-not [string]::IsNullOrEmpty($Contact.mobilePhone)) {
-        $hashStr += "#$($Contact.mobilePhone)"
-    }
-    
-    return $hashStr
-}
-
 function Sync-UserContacts {
     param(
         [Parameter(Mandatory = $true)]
@@ -755,11 +736,11 @@ function Sync-UserContacts {
 }
 
 # Main execution
-try {
-    $startTime = Get-Date
+try {    $startTime = Get-Date
     Write-Log "Starting optimized ContactSync process"
-    $sourceDescription = [string]::IsNullOrEmpty($SourceGroupId) ? "all licensed users" : "users from source group $SourceGroupId"
+    $sourceDescription = if ([string]::IsNullOrEmpty($SourceGroupId)) { "all licensed users" } else { "users from source group $SourceGroupId" }
     Write-Log "Parameters: TargetGroupId=$TargetGroupId, SourceGroupId=$SourceGroupId, RemoveDeletedContacts=$RemoveDeletedContacts, UpdateExistingContacts=$UpdateExistingContacts, IncludeExternalContacts=$IncludeExternalContacts"
+    Write-Log "Source: $sourceDescription"
     
     Connect-ToMicrosoftGraph
     

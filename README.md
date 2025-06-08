@@ -16,6 +16,7 @@ This repository contains a suite of PowerShell scripts for managing Microsoft 36
 - Creates contacts for all licensed users in the tenant
 - Updates existing contacts when user information changes
 - Removes contacts for deprovisioned users
+- **Organization-specific contact management** - Define which users serve as contacts for different groups
 - Supports exclusion lists for specific users
 - Configurable to include or exclude cloud-only users
 - Optimized performance with batch operations and fallback mechanisms
@@ -167,6 +168,49 @@ A helper script for assigning Graph API permissions to your Automation Account's
 2. Retrieves the Microsoft Graph Service Principal
 3. Assigns the necessary permissions (Contacts.ReadWrite, User.Read.All, Group.Read.All) to the specified Managed Identity
 4. Reports on successful assignments
+
+## Organization-Specific Contact Management
+
+**New in v1.4.0**: ContactSync now supports organization-specific contact lists, allowing you to manage multiple organizations within a single Microsoft 365 tenant.
+
+### Use Case
+This feature addresses scenarios where:
+- Multiple organizations share a single Azure tenant
+- Users should only see contacts relevant to their organization
+- You want to maintain organizational boundaries for contact visibility
+
+### Setup Example
+To configure organization-specific contacts:
+
+1. **Create Security Groups** (if they don't exist):
+   - `OrgA-Users` - Contains all users from Organization A
+   - `OrgB-Users` - Contains all users from Organization B
+
+2. **Configure Multiple Schedules**:
+   
+   **Schedule 1 - Organization A**:
+   ```powershell
+   # Parameters for Organization A runbook
+   TargetGroupId = "12345678-1234-1234-1234-123456789abc"  # OrgA-Users group ID
+   SourceGroupId = "12345678-1234-1234-1234-123456789abc"  # Same group - OrgA users get OrgA contacts
+   ```
+   
+   **Schedule 2 - Organization B**:
+   ```powershell
+   # Parameters for Organization B runbook  
+   TargetGroupId = "87654321-4321-4321-4321-cba987654321"  # OrgB-Users group ID
+   SourceGroupId = "87654321-4321-4321-4321-cba987654321"  # Same group - OrgB users get OrgB contacts
+   ```
+
+3. **Result**: 
+   - Users in Organization A will only see contacts from Organization A
+   - Users in Organization B will only see contacts from Organization B
+   - No tenant splitting required
+
+### Advanced Scenarios
+- **Cross-organizational contacts**: Set different `TargetGroupId` and `SourceGroupId` to provide one organization's contacts to another
+- **Global directory**: Leave `SourceGroupId` blank to provide all licensed users as contacts to a specific group
+- **Departmental contacts**: Use department-specific groups for more granular control
 
 ## Mobile Device Configuration
 
