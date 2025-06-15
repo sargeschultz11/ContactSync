@@ -1,4 +1,4 @@
-# ContactSync - Enterprise Contact Synchronization Solution for Microsoft 365
+# ContactSync - Enterprise Contact Synchronization for Microsoft 365
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue.svg)](https://github.com/PowerShell/PowerShell)
@@ -10,52 +10,34 @@
 [![Made with](https://img.shields.io/badge/Made%20with-PowerShell-1f425f.svg)](https://www.microsoft.com/powershell)
 
 ## Overview
-This repository contains a suite of PowerShell scripts for managing Microsoft 365 contacts across your organization. The main script, ContactsSync.ps1, automates the synchronization of all licensed Microsoft 365 users to the Exchange contacts of members in a specified security group. Additional utility scripts are provided for cleanup, diagnostics, and maintenance operations.
 
-## Core Features
-- Creates contacts for all licensed users in the tenant
-- Updates existing contacts when user information changes
-- Removes contacts for deprovisioned users
-- **Organization-specific contact management** - Define which users serve as contacts for different groups
-- Supports exclusion lists for specific users
-- Configurable to include or exclude cloud-only users
-- Optimized performance with batch operations and fallback mechanisms
-- Throttling detection and handling
-- Support for Azure Automation Managed Identity authentication (improved security)
+ContactSync automates the synchronization of Microsoft 365 users as Exchange contacts for members of a specified security group. This creates a complete, up-to-date company directory for designated users without manual maintenance.
 
-## Included Scripts
+## Key Features
 
-| Script | Description |
-|--------|-------------|
-| **ContactsSync.ps1** | Main script for synchronizing contacts across the organization |
-| **ContactCleanup.ps1** | Removes duplicate contacts and contacts with specified categories |
-| **DeleteContactFolder.ps1** | Deletes specific contact folders (e.g., "Administrator") |
-| **ContactDiagnostic.ps1** | Analyzes contact data for a specific user to help troubleshoot issues |
-| **Add-GraphPermissions.ps1** | Helper script for assigning Graph API permissions to your Automation Account's Managed Identity |
+- **Automated contact synchronization** - Creates and maintains contacts for all licensed users
+- **Organization-specific directories** - Define which users serve as contacts for different groups  
+- **Smart updates** - Updates existing contacts when user information changes
+- **Cleanup handling** - Removes contacts for deprovisioned users
+- **Secure authentication** - Uses Azure Automation Managed Identity (no stored credentials)
+- **Performance optimized** - Batch operations with intelligent fallback and throttling handling
 
 ## Prerequisites
+
 - Microsoft 365 tenant with Exchange Online
-- Azure Automation account with System-Assigned Managed Identity enabled
+- Azure Automation account 
 - Security group containing users who should receive the contacts
-- Az PowerShell modules installed in your Automation account
 
-## Required Graph API Permissions
-The Managed Identity requires the following Microsoft Graph API permissions:
-- `User.Read.All` - To read all user profiles
-- `Group.Read.All` - To read group memberships
-- `Contacts.ReadWrite` - To manage user contacts
-
-## Setup Instructions (Managed Identity Authentication)
+## Setup Instructions
 
 ### 1. Enable System-Assigned Managed Identity
 1. Navigate to your Azure Automation account
-2. Select "Identity" from the sidebar
+2. Select "Identity" from the sidebar  
 3. Under "System assigned" tab, switch the Status to "On" and click "Save"
-4. Copy the Object ID - you'll need this to assign API permissions
+4. Copy the Object ID - you'll need this for permissions
 
 ### 2. Assign API Permissions to Managed Identity
-1. Run the `Add-GraphPermissions.ps1` script from a local machine with an account with global admin permissions
-2. Run the script with the Object ID from your Automation Account's Managed Identity:
+1. Run the `utilities/Add-GraphPermissions.ps1` script from a local machine with global admin permissions:
    ```powershell
    .\Add-GraphPermissions.ps1 -AutomationMSI_ID "<Your-Automation-Account-MSI-Object-ID>"
    ```
@@ -64,266 +46,78 @@ The Managed Identity requires the following Microsoft Graph API permissions:
 1. Create a security group in Microsoft 365 containing users who should receive contacts
 2. Note the Object ID of the group
 
-### 4. Set Up Azure Automation
-1. Create an Azure Automation account (if not already done)
-2. Import the Az modules (`Az.Accounts` minimum required. These are usually preloaded for you when you create the runbook.)
-3. Create the following Automation variable (optional):
-   - `ExclusionList` (optional): Line-separated list of user emails to exclude
+### 4. Import and Configure the Main Script
+1. Import `ContactSync.ps1` as a PowerShell runbook in your Automation account
+2. Configure the required parameter `TargetGroupId` with your security group Object ID
+3. Publish the runbook
 
-### 5. Import the Scripts as Runbooks
-1. Import all scripts as PowerShell runbooks
-2. Edit the script parameters as needed, especially the `TargetGroupId`
-3. Publish the runbooks
+### 5. Schedule the Runbook
+1. Create a schedule to run ContactSync.ps1 at your desired frequency (daily recommended)
+2. Link the schedule to the runbook with the `TargetGroupId` parameter
 
-### 6. Schedule the Primary Runbook
-1. Create a schedule for the ContactsSync.ps1 runbook to run at your desired frequency (daily recommended)
-2. Link the schedule to the runbook
-3. Configure the parameters for the scheduled run:
-   - `TargetGroupId`: The Object ID of your security group
-   - Other parameters as needed
-
-## ContactsSync.ps1 Parameters
+## Configuration Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `TargetGroupId` | string | Required | The Microsoft 365 group ID containing users who should receive the contacts |
+| `TargetGroupId` | string | **Required** | The Microsoft 365 group ID containing users who should receive the contacts |
 | `SourceGroupId` | string | "" | The Microsoft 365 group ID containing users who should be synchronized as contacts. If not specified, all licensed users in the tenant will be used. |
-| `ExclusionListVariableName` | string | "ExclusionList" | The name of the Automation variable containing users to exclude |
+| `ExclusionListVariableName` | string | "ExclusionList" | The name of the Automation variable containing users to exclude (line-separated list) |
 | `RemoveDeletedContacts` | bool | true | Whether to remove contacts that no longer exist in the source |
 | `UpdateExistingContacts` | bool | true | Whether to update existing contacts with current information |
 | `IncludeExternalContacts` | bool | true | Whether to include cloud-only users in the contact synchronization |
 | `MaxConcurrentUsers` | int | 5 | Maximum number of concurrent users to process |
 | `UseBatchOperations` | bool | true | Whether to attempt using batch operations (will fall back if needed) |
-| `CharacterEncoding` | string | "UTF-8" | Character encoding to use for string handling |
-
-## ContactCleanup.ps1 Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `TargetGroupId` | string | Required | The Microsoft 365 group ID containing users whose contacts should be cleaned up |
-| `PreserveCategory` | string | "Company Contacts" | The contact category to preserve |
-| `RemoveCategory` | string | "Administrator" | The contact category to remove |
-| `MaxConcurrentUsers` | int | 5 | Maximum number of concurrent users to process |
-| `WhatIf` | switch | true | Run in simulation mode without making any changes |
-| `DetailedLogging` | switch | true | Enables more detailed logging of contact processing |
-
-## DeleteContactFolder.ps1 Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `TargetGroupId` | string | Required | The Microsoft 365 group ID containing users whose contact folders should be cleaned up |
-| `FolderNameToDelete` | string | "Administrator" | The name of the contact folder to delete |
-| `WhatIf` | switch | false | Run in simulation mode without making any changes |
-
-## ContactDiagnostic.ps1 Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `TargetUserId` | string | Required | The Microsoft 365 user ID or UPN whose contacts should be analyzed |
-
-## How It Works
-
-### ContactsSync.ps1
-The primary script that handles the synchronization of contacts.
-
-1. **Authentication**: Uses the Azure Automation account's Managed Identity to obtain an access token for the Microsoft Graph API, managing token expiration and refresh automatically.
-2. **Data Retrieval**: 
-   - If `SourceGroupId` is specified, retrieves users from that group to use as contacts.
-   - If `SourceGroupId` is not specified, retrieves all licensed users from the Microsoft 365 tenant.
-   - Filters based on exclusion list and license status.
-   - Retrieves all members of the target security group who will receive the contacts.
-3. **Contact Synchronization**: For each user in the target group, retrieves existing contacts, creates new contacts for users that don't exist in the contact list, updates existing contacts if user information has changed, and removes contacts for users who are no longer in the organization.
-4. **Performance Optimization**: Attempts to use batch operations for better performance, with fallback to individual operations if needed. Implements throttling detection and exponential backoff.
-
-### ContactCleanup.ps1
-A utility script for cleaning up duplicate contacts and removing contacts with specified categories.
-
-1. Identifies all contacts for users in the specified security group
-2. Groups contacts by display name and email address to detect duplicates
-3. Identifies contacts with specified categories to remove (default is "Administrator")
-4. Preserves contacts with a specified category (default is "Company Contacts")
-5. Removes duplicate contacts, prioritizing those with the preserved category
-6. Provides detailed logging of all operations
-
-### DeleteContactFolder.ps1
-A utility script for deleting specific contact folders.
-
-1. Identifies all contact folders for users in the specified security group
-2. Locates folders with the specified name (default is "Administrator")
-3. Deletes the folder and all its contents
-4. Provides detailed reporting of operations
-
-### ContactDiagnostic.ps1
-A diagnostic script for analyzing contact data for a specific user.
-
-1. Retrieves all contacts for the specified user
-2. Analyzes contacts for duplicates based on display name
-3. Reports on contact categories and their distribution
-4. Provides detailed output for diagnosing contact-related issues
-
-### Add-GraphPermissions.ps1
-A helper script for assigning Graph API permissions to your Automation Account's Managed Identity.
-
-1. Connects to Microsoft Graph using your credentials (requires AppRoleAssignment.ReadWrite.All and Application.Read.All)
-2. Retrieves the Microsoft Graph Service Principal
-3. Assigns the necessary permissions (Contacts.ReadWrite, User.Read.All, Group.Read.All) to the specified Managed Identity
-4. Reports on successful assignments
 
 ## Organization-Specific Contact Management
 
-**New in v1.4.0**: ContactSync now supports organization-specific contact lists, allowing you to manage multiple organizations within a single Microsoft 365 tenant.
+**Advanced Feature**: Configure separate contact directories for different organizations within the same tenant.
 
-### Use Case
-This feature addresses scenarios where:
-- Multiple organizations share a single Azure tenant
-- Users should only see contacts relevant to their organization
-- You want to maintain organizational boundaries for contact visibility
+### Example Setup
+Create separate schedules for each organization:
 
-### Setup Example
-To configure organization-specific contacts:
+**Organization A**:
+```powershell
+TargetGroupId = "12345678-1234-1234-1234-123456789abc"  # OrgA-Users group ID
+SourceGroupId = "12345678-1234-1234-1234-123456789abc"  # Same group - OrgA users get OrgA contacts
+```
 
-1. **Create Security Groups** (if they don't exist):
-   - `OrgA-Users` - Contains all users from Organization A
-   - `OrgB-Users` - Contains all users from Organization B
+**Organization B**:
+```powershell
+TargetGroupId = "87654321-4321-4321-4321-cba987654321"  # OrgB-Users group ID  
+SourceGroupId = "87654321-4321-4321-4321-cba987654321"  # Same group - OrgB users get OrgB contacts
+```
 
-2. **Configure Multiple Schedules**:
-   
-   **Schedule 1 - Organization A**:
-   ```powershell
-   # Parameters for Organization A runbook
-   TargetGroupId = "12345678-1234-1234-1234-123456789abc"  # OrgA-Users group ID
-   SourceGroupId = "12345678-1234-1234-1234-123456789abc"  # Same group - OrgA users get OrgA contacts
-   ```
-   
-   **Schedule 2 - Organization B**:
-   ```powershell
-   # Parameters for Organization B runbook  
-   TargetGroupId = "87654321-4321-4321-4321-cba987654321"  # OrgB-Users group ID
-   SourceGroupId = "87654321-4321-4321-4321-cba987654321"  # Same group - OrgB users get OrgB contacts
-   ```
+**Result**: Users in each organization only see contacts from their own organization.
 
-3. **Result**: 
-   - Users in Organization A will only see contacts from Organization A
-   - Users in Organization B will only see contacts from Organization B
-   - No tenant splitting required
+## How It Works
 
-### Advanced Scenarios
-- **Cross-organizational contacts**: Set different `TargetGroupId` and `SourceGroupId` to provide one organization's contacts to another
-- **Global directory**: Leave `SourceGroupId` blank to provide all licensed users as contacts to a specific group
-- **Departmental contacts**: Use department-specific groups for more granular control
+ContactSync uses your Azure Automation account's Managed Identity to securely access the Microsoft Graph API and:
 
-## Mobile Device Configuration
-
-### Configuring Intune for iOS Devices
-To ensure that the synchronized contacts are available on mobile devices, you need to configure an Email profile in Microsoft Intune:
-
-1. In the Microsoft Intune admin center, navigate to **Devices** > **Configuration profiles**
-2. Create a new profile using the **Email** template
-3. Configure the following settings:
-   - **Email server**: outlook.office365.com
-   - **Account name**: Corporate Directory
-   - **Username attribute from Microsoft Entra ID**: User principal name
-   - **Email address attribute from Microsoft Entra ID**: User principal name
-   - **Authentication method**: Username and password
-   - **SSL**: Enable
-   - **OAuth**: Enable
-   - **Exchange data to sync**: Contacts only
-   - **Allow users to change sync settings**: No
-4. Assign the profile to the appropriate groups
-5. The contacts will sync to iOS devices without requiring user interaction
-
-## Migration from CiraSync
-
-The ContactCleanup.ps1 and DeleteContactFolder.ps1 scripts are specifically designed to assist with migration from CiraSync to the ContactsSync solution. They help clean up lingering data from the previous system, including:
-
-1. Removing duplicate contacts created during migration
-2. Removing contacts or folders with the "Administrator" category (typically used by CiraSync)
-3. Preserving contacts with the "Company Contacts" category (used by ContactsSync)
-
-For a smooth migration, use the following workflow:
-
-1. Run ContactDiagnostic.ps1 on a sample user to understand the current state of contacts
-2. Run ContactCleanup.ps1 with the WhatIf parameter set to true to simulate cleanup
-3. Review the logs and confirm the expected changes
-4. Run ContactCleanup.ps1 with WhatIf set to false to perform the actual cleanup
-5. If needed, run DeleteContactFolder.ps1 to remove any remaining Administrator folders
-6. Start the regular ContactsSync.ps1 process
-
-## Advantages of Managed Identity Authentication
-
-The updated scripts now use Azure Automation's Managed Identity for authentication, which provides several benefits:
-
-1. **Enhanced Security**: No need to store client secrets or credentials in variables
-2. **Simplified Management**: Automatic credential rotation without manual updates
-3. **Reduced Administrative Overhead**: No need to monitor expiring secrets
-4. **Compliance**: Better alignment with modern security best practices
+1. **Authenticates** using Managed Identity (no stored credentials required)
+2. **Retrieves** source users (from SourceGroupId or all licensed users) and target users (who receive contacts)
+3. **Synchronizes** contacts by creating new ones, updating existing ones, and removing obsolete ones
+4. **Optimizes** performance with batch operations and intelligent throttling
 
 ## Troubleshooting
 
 ### Common Issues
-- **Authentication failures**: Verify that your Managed Identity has been granted the required Graph API permissions
-- **Permission errors**: Ensure the Managed Identity has the required Graph API permissions by running the Add-GraphPermissions.ps1 script
-- **Az PowerShell errors**: Make sure the Az.Accounts module is imported into your Automation account
+- **Authentication failures**: Verify Managed Identity has required Graph API permissions
+- **Missing contacts**: Check exclusion list and user license status  
 - **Performance issues**: Adjust the `MaxConcurrentUsers` parameter
-- **Missing contacts**: Check the exclusion list and verify user license status
-- **Duplicate contacts**: Run ContactDiagnostic.ps1 to identify duplicates, then use ContactCleanup.ps1 to resolve them
 
-### Viewing Logs
+### View Logs
 1. In Azure Automation, go to the Jobs section
-2. Select the most recent job run
-3. View the Output tab to see detailed logs
+2. Select the most recent job run  
+3. View the Output tab for detailed logs
 
-## Advanced Configuration
+## Utility Scripts
 
-### Multi-Organization Contact Management
+Additional maintenance scripts are available in the `utilities/` folder:
 
-The `SourceGroupId` parameter enables managing contacts for multiple organizations within a single tenant, addressing scenarios where organizational boundaries need to be maintained for contact visibility.
+- **`ContactCleanup.ps1`** - Removes duplicate contacts and specific categories
+- **`DeleteContactFolder.ps1`** - Deletes specific contact folders (e.g., "Administrator")  
+- **`ContactDiagnostic.ps1`** - Analyzes contact data for troubleshooting
+- **`Add-GraphPermissions.ps1`** - Assigns Graph API permissions to Managed Identity
 
-To implement organization-specific contact lists:
-
-1. **Create security groups** for each organization (e.g., "OrgA-Contacts", "OrgB-Contacts")
-2. **Add the appropriate users** to each group
-3. **Create separate runbook schedules** for each organization with different parameters:
-   ```
-   Schedule 1:
-   - TargetGroupId: [Group ID for OrgA-Users]  # Users who will receive contacts
-   - SourceGroupId: [Group ID for OrgA-Users]  # Users who will be created as contacts
-   
-   Schedule 2:
-   - TargetGroupId: [Group ID for OrgB-Users]  # Users who will receive contacts
-   - SourceGroupId: [Group ID for OrgB-Users]  # Users who will be created as contacts
-   ```
-4. This configuration ensures that **users in Organization A only see contact details for other users from Organization A**, and similarly for Organization B.
-
-This approach is especially valuable for:
-- Shared tenants hosting multiple business units
-- Holding companies with independent subsidiaries
-- Educational institutions with separate departments or schools
-- Government agencies with distinct organizational boundaries
-
-### Excluding Users
-To exclude specific users from being created as contacts:
-1. In Azure Automation, edit the `ExclusionList` variable
-2. Add user email addresses, one per line
-
-### Customizing Contact Properties
-To customize the contact properties:
-1. Modify the `New-ContactObject` function in the script
-2. Add or modify properties as needed
-
-## Maintenance
-- Periodically check the Azure Automation job history for errors
-- Review and update the exclusion list as needed
-- Run ContactDiagnostic.ps1 periodically to check for contact issues
-- Run ContactCleanup.ps1 if duplicate contacts are reported
-
-## Migrating from App Registration to Managed Identity
-If you're migrating from the previous version that used App Registration:
-
-1. Enable System-Assigned Managed Identity on your Automation Account
-2. Run Add-GraphPermissions.ps1 to assign the necessary permissions
-3. Update your runbooks to the latest versions that use Managed Identity authentication
-4. Test with a single user before full deployment
-5. After confirming functionality, you can safely delete the previous App Registration
-6. Remove the ClientId, ClientSecret, and TenantId variables from your Automation Account
+These are typically used for one-time cleanup operations or diagnostics.
 
